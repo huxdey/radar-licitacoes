@@ -47,7 +47,7 @@ type Pagina<T> = { data: T[]; totalPaginas: number; numeroPagina: number; pagina
 
 export const yyyymmdd = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, '');
 
-async function getJson<T>(url: string, tentativas = 3): Promise<T | null> {
+async function getJson<T>(url: string, tentativas = 5): Promise<T | null> {
   let ultimoErro: unknown;
   for (let i = 0; i < tentativas; i++) {
     try {
@@ -59,7 +59,9 @@ async function getJson<T>(url: string, tentativas = 3): Promise<T | null> {
     } catch (e) {
       ultimoErro = e;
     }
-    await new Promise((res) => setTimeout(res, 1500 * (i + 1)));
+    // 429 = o PNCP pediu para ir mais devagar: espera mais a cada tentativa
+    const espera = String(ultimoErro).includes(' 429 ') ? 4000 * (i + 1) : 1500 * (i + 1);
+    await new Promise((res) => setTimeout(res, espera));
   }
   throw ultimoErro;
 }
@@ -77,7 +79,7 @@ export class BuscaIncompleta extends Error {
   }
 }
 
-/** Percorre todas as páginas (5 por vez). Se faltar alguma, lança BuscaIncompleta com o que conseguiu. */
+/** Percorre todas as páginas (2 por vez, para não ser bloqueado). Se faltar alguma, lança BuscaIncompleta com o que conseguiu. */
 async function todasPaginas(base: string, params: Record<string, string | number | undefined>, maxPaginas = 400) {
   const url = (pagina: number) => {
     const qs = new URLSearchParams();
@@ -89,11 +91,11 @@ async function todasPaginas(base: string, params: Record<string, string | number
   if (!primeira || !primeira.data?.length) return out;
   out.push(...primeira.data);
   const total = Math.min(Number(primeira.totalPaginas) || 1, maxPaginas);
-  for (let p = 2; p <= total; p += 5) {
+  for (let p = 2; p <= total; p += 2) {
     if (Date.now() > prazoFinal) {
       throw new BuscaIncompleta(`Tempo esgotado na página ${p - 1} de ${total}. Rode de novo para completar.`, out);
     }
-    const lote = Array.from({ length: Math.min(5, total - p + 1) }, (_, i) => p + i);
+    const lote = Array.from({ length: Math.min(2, total - p + 1) }, (_, i) => p + i);
     try {
       const paginas = await Promise.all(lote.map((n) => getJson<Pagina<CompraPNCP>>(url(n))));
       paginas.forEach((pg) => pg?.data && out.push(...pg.data));
