@@ -27,7 +27,7 @@ export default async function Radar({ searchParams }: { searchParams: Record<str
   const pagina = Math.max(1, Number(searchParams.p ?? 1));
   const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
-  let q = sb.from('tenders').select('*', { count: 'exact' });
+  let q = sb.from('tenders').select('*', { count: 'exact' }).or('origem.eq.manual,categorias.neq.{}');
   if (filtro !== 'ignoradas') q = q.eq('ignorado', false);
   if (filtro === 'abertas') q = q.or(`data_encerramento_proposta.gte.${new Date().toISOString()},data_encerramento_proposta.is.null`);
   if (filtro === 'novas') q = q.eq('primeira_vez_visto', hoje);
@@ -48,6 +48,18 @@ export default async function Radar({ searchParams }: { searchParams: Record<str
     sb.from('cases').select('id,tender_id,company:companies(nome_fantasia,razao_social)'),
   ]);
   const nomeCat = new Map((cats ?? []).map((c) => [c.id, c.nome]));
+
+  // contagem por segmento das oportunidades abertas e não ignoradas
+  const { data: abertas } = await sb
+    .from('tenders')
+    .select('categorias')
+    .eq('ignorado', false)
+    .or('origem.eq.manual,categorias.neq.{}')
+    .or(`data_encerramento_proposta.gte.${new Date().toISOString()},data_encerramento_proposta.is.null`)
+    .limit(5000);
+  const contagem = new Map<string, number>();
+  (abertas ?? []).forEach((t) => (t.categorias as string[]).forEach((c) => contagem.set(c, (contagem.get(c) ?? 0) + 1)));
+  const contagemTotal = abertas?.length ?? 0;
   const casosPorLic = new Map<string, any[]>();
   (casos ?? []).forEach((c: any) => casosPorLic.set(c.tender_id, [...(casosPorLic.get(c.tender_id) ?? []), c]));
   const link = (p: Record<string, string | undefined>) => {
@@ -76,19 +88,36 @@ export default async function Radar({ searchParams }: { searchParams: Record<str
         ))}
       </div>
 
-      <form className="card grid gap-2 sm:grid-cols-5" action="/radar">
-        <input type="hidden" name="filtro" value={filtro} />
-        <input name="busca" defaultValue={searchParams.busca} placeholder="Buscar no objeto..." className="input sm:col-span-2" />
-        <select name="segmento" defaultValue={searchParams.segmento ?? ''} className="input">
-          <option value="">Todos os segmentos</option>
-          {cats?.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-        </select>
-        <input name="uf" defaultValue={searchParams.uf} placeholder="UF" maxLength={2} className="input" />
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="meepp" value="1" defaultChecked={!!searchParams.meepp} /> ME/EPP</label>
-          <button className="btn-secundario ml-auto">Filtrar</button>
+      <div className="card">
+        <div className="label">Segmento (clique para filtrar)</div>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={link({ segmento: undefined, p: undefined })}
+            className={`chip px-3 py-1.5 text-sm ${!searchParams.segmento ? 'bg-selo text-white' : 'border border-black/10 bg-white hover:bg-black/5'}`}
+          >
+            Todos ({contagemTotal})
+          </Link>
+          {cats?.map((c) => (
+            <Link
+              key={c.id}
+              href={link({ segmento: c.id, p: undefined })}
+              className={`chip px-3 py-1.5 text-sm ${searchParams.segmento === c.id ? 'bg-selo text-white' : 'border border-black/10 bg-white hover:bg-black/5'}`}
+            >
+              {c.nome} ({contagem.get(c.id) ?? 0})
+            </Link>
+          ))}
         </div>
-      </form>
+        <form className="mt-3 grid gap-2 sm:grid-cols-5" action="/radar">
+          <input type="hidden" name="filtro" value={filtro} />
+          {searchParams.segmento && <input type="hidden" name="segmento" value={searchParams.segmento} />}
+          <input name="busca" defaultValue={searchParams.busca} placeholder="Buscar palavra no objeto..." className="input sm:col-span-3" />
+          <input name="uf" defaultValue={searchParams.uf} placeholder="UF" maxLength={2} className="input" />
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="meepp" value="1" defaultChecked={!!searchParams.meepp} /> ME/EPP</label>
+            <button className="btn-secundario ml-auto">Buscar</button>
+          </div>
+        </form>
+      </div>
 
       <details className="card">
         <summary className="cursor-pointer text-sm font-semibold">+ Adicionar licitação manualmente</summary>

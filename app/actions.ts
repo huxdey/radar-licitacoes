@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireMember } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { runRadar, type ModoRadar } from '@/lib/radar';
+import { reclassificarExistentes, runRadar, type ModoRadar } from '@/lib/radar';
 import { consultarCompra, parseIdentificador } from '@/lib/pncp';
 import { classificar, indicioMeEpp, type Categoria } from '@/lib/classify';
 import {
@@ -33,9 +33,10 @@ export async function rodarRadarAgora(modo: ModoRadar): Promise<Resultado> {
     const r = await runRadar(modo, user!.id);
     revalidatePath('/');
     revalidatePath('/radar');
-    const base = `${r.encontradas} encontradas, ${r.preFiltradas} nos seus segmentos, ${r.prioritarias} prioritárias.`;
+    const base = `${r.preFiltradas} licitações nos seus segmentos (${r.prioritarias} prioritárias), de ${r.encontradas} que o governo publicou no total.`;
     if (r.status === 'concluido') return { ok: true, msg: base };
-    return { ok: false, msg: `Busca ${r.status === 'falhou' ? 'falhou' : 'incompleta'} (${r.erros.length} consulta(s) com erro). ${base}` };
+    if (r.status === 'parcial') return { ok: true, msg: `${base} Parte da busca não terminou a tempo: clique de novo para completar.` };
+    return { ok: false, msg: `O PNCP não respondeu. Tente de novo em alguns minutos. (${r.erros[0]?.erro ?? ''})` };
   } catch (e) {
     return erro(e);
   }
@@ -167,8 +168,10 @@ export async function salvarCategoria(fd: FormData): Promise<Resultado> {
     if (!row.nome || !row.palavras_chave.length) return { ok: false, msg: 'Nome e ao menos uma palavra-chave.' };
     const { error } = id ? await sb.from('search_categories').update(row).eq('id', id) : await sb.from('search_categories').insert(row);
     if (error) throw new Error(error.message);
+    const n = await reclassificarExistentes();
     revalidatePath('/configuracoes');
-    return { ok: true, msg: 'Segmento salvo.' };
+    revalidatePath('/radar');
+    return { ok: true, msg: `Segmento salvo. ${n} licitação(ões) reclassificada(s).` };
   } catch (e) {
     return erro(e);
   }

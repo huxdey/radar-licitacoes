@@ -1,0 +1,10 @@
+-- Palavras-chave mais precisas (evita eletrodoméstico em Limpeza/Ar, catraca em Portaria etc.)
+update public.search_categories set palavras_chave = '{limpeza predial,limpeza e conservacao,conservacao predial,servicos de limpeza,higienizacao predial,limpeza hospitalar,servicos continuos de limpeza}', exclusoes = '{limpeza urbana,coleta de lixo,residuos solidos,limpeza de fossa,eletrodomesticos,material de limpeza,produtos de limpeza}' where nome = 'Limpeza e conservação';
+update public.search_categories set palavras_chave = '{portaria,porteiro,porteiros,recepcionista,recepcionistas,controlador de acesso,controladores de acesso}', exclusoes = '{vigilancia armada,seguranca armada,catraca,catracas}' where nome = 'Portaria';
+update public.search_categories set palavras_chave = '{climatizacao,ar condicionado,ar-condicionado,instalacao de split,manutencao de split,condicionadores de ar}', exclusoes = '{veicular,automotivo,eletrodomesticos}' where nome = 'Ar-condicionado';
+update public.search_categories set palavras_chave = '{servicos graficos,material grafico,materiais graficos,impressao grafica,banner,banners,panfletos,adesivos,comunicacao visual,material impresso}' where nome = 'Gráficas';
+update public.search_categories set palavras_chave = '{uniformes escolares,uniformes profissionais,uniforme,uniformes,camisetas,confeccao de uniformes}' where nome = 'Uniformes';
+update public.search_categories set palavras_chave = '{papelaria,material de expediente,material de escritorio,suprimentos de escritorio,papel a4,papel sulfite}' where nome = 'Material de escritório';
+update public.search_categories set palavras_chave = '{material de limpeza,materiais de limpeza,produtos de limpeza,descartaveis,copos descartaveis}' where nome = 'Distribuidoras';
+update public.search_categories set palavras_chave = '{computadores,notebooks,perifericos,suprimentos de informatica,microcomputadores,monitores de video}' where nome = 'Informática';
+select nome, array_length(palavras_chave,1) as palavras from public.search_categories order by nome;

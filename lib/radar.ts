@@ -18,6 +18,7 @@ export async function runRadar(modo: ModoRadar = 'diario', userId?: string) {
   if (!cfg) throw new Error('Configurações não encontradas. Rode a migration do banco.');
   const categorias = (cats ?? []) as Categoria[];
   const nomeCat = new Map(categorias.map((c) => [c.id, c.nome]));
+  await reclassificarExistentes(categorias);
 
   const hoje = hojeSP();
   const { data: rel } = await sb
@@ -131,8 +132,7 @@ export async function runRadar(modo: ModoRadar = 'diario', userId?: string) {
     if (error) erros.push({ local: 'banco', modalidade: 0, erro: error.message });
   }
 
-  const totalConsultas = locais.length * (cfg.modalidades as number[]).length;
-  const status = erros.length === 0 ? 'concluido' : erros.length >= totalConsultas ? 'falhou' : 'parcial';
+  const status = erros.length === 0 ? 'concluido' : brutos.size > 0 ? 'parcial' : 'falhou';
 
   await sb
     .from('daily_reports')
@@ -156,4 +156,33 @@ export async function runRadar(modo: ModoRadar = 'diario', userId?: string) {
   });
 
   return { status, encontradas: brutos.size, preFiltradas: linhas.length, prioritarias, erros };
+}
+
+/**
+ * Reaplica as palavras-chave atuais em tudo que já está no banco.
+ * Assim, quando um segmento é ajustado, a lista antiga também é corrigida.
+ * Licitações que não pertencem mais a nenhum segmento ficam com categorias vazias e somem do radar.
+ */
+export async function reclassificarExistentes(categorias?: Categoria[]) {
+  const sb = supabaseAdmin();
+  if (!categorias) {
+    const { data } = await sb.from('search_categories').select('id,nome,palavras_chave,exclusoes,ativo');
+    categorias = (data ?? []) as Categoria[];
+  }
+  const { data: lista } = await sb
+    .from('tenders')
+    .select('id,objeto,informacao_complementar,categorias,score,me_epp_indicio,origem')
+    .eq('origem', 'pncp')
+    .limit(10000);
+  const mudancas: { id: string; categorias: string[]; score: number; prioritaria: boolean }[] = [];
+  for (const t of lista ?? []) {
+    const { ids, score } = classificar(t.objeto ?? '', t.informacao_complementar ?? undefined, categorias);
+    const iguais = ids.length === (t.categorias as string[]).length && ids.every((i) => (t.categorias as string[]).includes(i));
+    if (iguais && score === t.score) continue;
+    mudancas.push({ id: t.id, categorias: ids, score, prioritaria: score >= 2 || (t.me_epp_indicio && score >= 1) });
+  }
+  for (const m of mudancas) {
+    await sb.from('tenders').update({ categorias: m.categorias, score: m.score, prioritaria: m.prioritaria }).eq('id', m.id);
+  }
+  return mudancas.length;
 }
