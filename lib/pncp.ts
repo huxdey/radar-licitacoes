@@ -64,16 +64,42 @@ async function getJson<T>(url: string, tentativas = 3): Promise<T | null> {
   throw ultimoErro;
 }
 
-/** Percorre todas as páginas. Lança erro se alguma página falhar (nunca devolve lista incompleta em silêncio). */
-async function todasPaginas(base: string, params: Record<string, string | number | undefined>, maxPaginas = 200) {
-  const out: CompraPNCP[] = [];
-  for (let pagina = 1; pagina <= maxPaginas; pagina++) {
+/** Prazo máximo de execução da busca (a hospedagem corta funções longas). */
+let prazoFinal = Number.POSITIVE_INFINITY;
+export function definirPrazoBusca(msAPartirDeAgora: number) {
+  prazoFinal = Date.now() + msAPartirDeAgora;
+}
+
+/** Erro que carrega o que já foi baixado, para não perder resultados parciais. */
+export class BuscaIncompleta extends Error {
+  constructor(msg: string, public parcial: CompraPNCP[]) {
+    super(msg);
+  }
+}
+
+/** Percorre todas as páginas (5 por vez). Se faltar alguma, lança BuscaIncompleta com o que conseguiu. */
+async function todasPaginas(base: string, params: Record<string, string | number | undefined>, maxPaginas = 400) {
+  const url = (pagina: number) => {
     const qs = new URLSearchParams();
     Object.entries({ ...params, pagina, tamanhoPagina: 50 }).forEach(([k, v]) => v !== undefined && String(v) !== '' && qs.set(k, String(v)));
-    const p = await getJson<Pagina<CompraPNCP>>(`${base}?${qs}`);
-    if (!p || !p.data?.length) break;
-    out.push(...p.data);
-    if (!p.paginasRestantes) break;
+    return `${base}?${qs}`;
+  };
+  const out: CompraPNCP[] = [];
+  const primeira = await getJson<Pagina<CompraPNCP>>(url(1));
+  if (!primeira || !primeira.data?.length) return out;
+  out.push(...primeira.data);
+  const total = Math.min(Number(primeira.totalPaginas) || 1, maxPaginas);
+  for (let p = 2; p <= total; p += 5) {
+    if (Date.now() > prazoFinal) {
+      throw new BuscaIncompleta(`Tempo esgotado na página ${p - 1} de ${total}. Rode de novo para completar.`, out);
+    }
+    const lote = Array.from({ length: Math.min(5, total - p + 1) }, (_, i) => p + i);
+    try {
+      const paginas = await Promise.all(lote.map((n) => getJson<Pagina<CompraPNCP>>(url(n))));
+      paginas.forEach((pg) => pg?.data && out.push(...pg.data));
+    } catch (e) {
+      throw new BuscaIncompleta(e instanceof Error ? e.message : String(e), out);
+    }
   }
   return out;
 }

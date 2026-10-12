@@ -1,6 +1,6 @@
 // Motor do Radar: busca no PNCP, deduplica, classifica, filtra e gera o relatório do dia.
 import { supabaseAdmin } from './supabase/admin';
-import { buscarAtualizadas, buscarComPropostaAberta, buscarPublicadas, type CompraPNCP } from './pncp';
+import { BuscaIncompleta, buscarAtualizadas, buscarComPropostaAberta, buscarPublicadas, definirPrazoBusca, type CompraPNCP } from './pncp';
 import { classificar, indicioMeEpp, type Categoria } from './classify';
 
 export type ModoRadar = 'diario' | 'completo';
@@ -10,6 +10,7 @@ const dataISO = (d: Date) => d.toISOString().slice(0, 10);
 
 export async function runRadar(modo: ModoRadar = 'diario', userId?: string) {
   const sb = supabaseAdmin();
+  definirPrazoBusca(230_000); // margem antes do limite de 300s da hospedagem
   const [{ data: cfg }, { data: cats }] = await Promise.all([
     sb.from('settings').select('*').eq('id', 1).single(),
     sb.from('search_categories').select('id,nome,palavras_chave,exclusoes,ativo'),
@@ -35,31 +36,31 @@ export async function runRadar(modo: ModoRadar = 'diario', userId?: string) {
       ? cfg.ufs.map((uf: string) => ({ uf, rotulo: uf }))
       : [{ rotulo: 'Brasil' }];
 
+  // olha 4 dias para trás: cobre fim de semana e feriado (duplicados são descartados)
   const ontem = new Date(hoje);
-  ontem.setDate(ontem.getDate() - 1);
+  ontem.setDate(ontem.getDate() - 4);
   const limiteProposta = new Date(hoje);
   limiteProposta.setDate(limiteProposta.getDate() + 120);
 
   for (const local of locais) {
     for (const modalidade of cfg.modalidades as number[]) {
-      try {
-        let lista: CompraPNCP[] = [];
-        if (modo === 'completo') {
-          lista = await buscarComPropostaAberta({ ate: limiteProposta, modalidade, uf: local.uf, municipioIbge: local.municipioIbge });
-        } else {
-          lista = await buscarPublicadas({ dataInicial: ontem, dataFinal: hoje, modalidade, uf: local.uf, municipioIbge: local.municipioIbge });
-          if (cfg.incluir_atualizados) {
-            lista.push(
-              ...(await buscarAtualizadas({ dataInicial: ontem, dataFinal: hoje, modalidade, uf: local.uf, municipioIbge: local.municipioIbge })),
-            );
-          }
-        }
+      const guardar = (lista: CompraPNCP[]) => {
         // deduplicação: mesmo número de controle = mesma licitação; fica a versão mais recente
         for (const c of lista) {
           const atual = brutos.get(c.numeroControlePNCP);
           if (!atual || (c.dataAtualizacaoGlobal ?? '') > (atual.dataAtualizacaoGlobal ?? '')) brutos.set(c.numeroControlePNCP, c);
         }
+      };
+      try {
+        const filtro = { modalidade, uf: local.uf, municipioIbge: local.municipioIbge };
+        if (modo === 'completo') {
+          guardar(await buscarComPropostaAberta({ ate: limiteProposta, ...filtro }));
+        } else {
+          guardar(await buscarPublicadas({ dataInicial: ontem, dataFinal: hoje, ...filtro }));
+          if (cfg.incluir_atualizados) guardar(await buscarAtualizadas({ dataInicial: ontem, dataFinal: hoje, ...filtro }));
+        }
       } catch (e) {
+        if (e instanceof BuscaIncompleta) guardar(e.parcial);
         erros.push({ local: local.rotulo, modalidade, erro: e instanceof Error ? e.message : String(e) });
       }
     }
