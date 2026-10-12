@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --fonte: 'Inter', 'Segoe UI', system-ui, sans-serif; }
+body { @apply bg-papel text-tinta antialiased; }
+.card { @apply rounded-xl border border-black/10 bg-white p-4 shadow-sm; }
+.btn { @apply inline-flex items-center justify-center gap-1 rounded-lg px-3 py-2 text-sm font-medium transition disabled:opacity-50; }
+.btn-primario { @apply btn bg-tinta text-white hover:bg-tinta/90; }
+.btn-secundario { @apply btn border border-black/15 bg-white hover:bg-black/5; }
+.btn-perigo { @apply btn border border-alerta/30 text-alerta hover:bg-alerta/5; }
+.input { @apply w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm outline-none focus:border-tinta; }
+.label { @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-black/50; }
+.chip { @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium; }
+h1 { @apply text-2xl font-bold tracking-tight; }
+h2 { @apply text-lg font-semibold; }
