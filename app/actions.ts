@@ -335,3 +335,13 @@ export async function validarItem(checkId: string, caseId: string, aprovado: boo
     return erro(e);
   }
 }
+
+/** Liga/desliga um segmento: desligado some do radar e deixa de ser guardado nas próximas buscas. */
+export async function alternarSegmento(id: string, ativo: boolean) {
+  const { sb, user } = await membro();
+  await sb.from('search_categories').update({ ativo }).eq('id', id);
+  await sb.from('activity_logs').insert({ user_id: user!.id, entidade: 'search_categories', entidade_id: id, acao: ativo ? 'ativar' : 'desativar' });
+  revalidatePath('/');
+  revalidatePath('/radar');
+  revalidatePath('/configuracoes');
+}

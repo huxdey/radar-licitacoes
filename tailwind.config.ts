@@ -4,13 +4,19 @@ export default {
   theme: {
     extend: {
       colors: {
-        tinta: '#14213d',
-        papel: '#f7f5f0',
-        selo: '#1f6f50',
-        alerta: '#b4441c',
-        ambar: '#b7791f',
+        tinta: '#0E2238',
+        papel: '#F2F4F6',
+        linha: '#DDE3EA',
+        selo: '#0F9D6E',
+        alerta: '#D14343',
+        ambar: '#E8A317',
+        nevoa: '#5B6B7D',
       },
-      fontFamily: { sans: ['var(--fonte)', 'system-ui', 'sans-serif'] },
+      fontFamily: {
+        sans: ['Figtree', 'system-ui', 'sans-serif'],
+        display: ['"Bricolage Grotesque"', 'Figtree', 'system-ui', 'sans-serif'],
+      },
+      borderRadius: { xl2: '1.25rem' },
     },
   },
   plugins: [],

@@ -18,22 +18,26 @@ const contem = (texto: string, termo: string) => {
   return new RegExp(`(^|\\s)${t.replace(/[-]/g, '[- ]?')}(s|es)?(\\s|$)`).test(texto);
 };
 
+/**
+ * Cada licitação recebe UM segmento só: o que tiver mais palavras-chave batendo
+ * (no empate, o de palavras mais específicas/longas). Assim os segmentos não se misturam.
+ * Classifica contra todos os segmentos; quais aparecem é decidido pelos segmentos ativos.
+ */
 export function classificar(objeto: string, complemento: string | undefined, categorias: Categoria[]) {
   const texto = normalizar(`${objeto} ${complemento ?? ''}`);
-  const ids: string[] = [];
-  const nomes: string[] = [];
-  let score = 0;
+  let melhor: { c: Categoria; hits: number; especificidade: number } | null = null;
   for (const c of categorias) {
-    if (!c.ativo) continue;
     if (c.exclusoes.some((e) => contem(texto, e))) continue;
-    const hits = c.palavras_chave.filter((p) => contem(texto, p)).length;
-    if (hits > 0) {
-      ids.push(c.id);
-      nomes.push(c.nome);
-      score += hits;
+    const batidas = c.palavras_chave.filter((p) => contem(texto, p));
+    if (!batidas.length) continue;
+    const especificidade = batidas.reduce((s, p) => s + p.length, 0);
+    if (!melhor || batidas.length > melhor.hits || (batidas.length === melhor.hits && especificidade > melhor.especificidade)) {
+      melhor = { c, hits: batidas.length, especificidade };
     }
   }
-  return { ids, nomes, score };
+  return melhor
+    ? { ids: [melhor.c.id], nomes: [melhor.c.nome], score: melhor.hits }
+    : { ids: [] as string[], nomes: [] as string[], score: 0 };
 }
 
 /** Indício de benefício ME/EPP no texto. A confirmação real é no edital/itens. */

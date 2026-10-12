@@ -18,6 +18,7 @@ export async function runRadar(modo: ModoRadar = 'diario', userId?: string) {
   if (!cfg) throw new Error('Configurações não encontradas. Rode a migration do banco.');
   const categorias = (cats ?? []) as Categoria[];
   const nomeCat = new Map(categorias.map((c) => [c.id, c.nome]));
+  const ativos = new Set(categorias.filter((c) => c.ativo).map((c) => c.id));
   await reclassificarExistentes(categorias);
 
   const hoje = hojeSP();
@@ -76,7 +77,7 @@ export async function runRadar(modo: ModoRadar = 'diario', userId?: string) {
   for (const c of brutos.values()) {
     const objeto = c.objetoCompra ?? '';
     const { ids, score } = classificar(objeto, c.informacaoComplementar, categorias);
-    if (!ids.length) continue; // fora dos segmentos monitorados
+    if (!ids.length || !ativos.has(ids[0])) continue; // fora dos segmentos que você escolheu
 
     const valor = c.valorTotalEstimado ?? null;
     if (cfg.valor_min && valor !== null && valor < Number(cfg.valor_min)) continue;

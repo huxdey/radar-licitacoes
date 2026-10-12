@@ -2,15 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { --fonte: 'Inter', 'Segoe UI', system-ui, sans-serif; }
-body { @apply bg-papel text-tinta antialiased; }
-.card { @apply rounded-xl border border-black/10 bg-white p-4 shadow-sm; }
-.btn { @apply inline-flex items-center justify-center gap-1 rounded-lg px-3 py-2 text-sm font-medium transition disabled:opacity-50; }
-.btn-primario { @apply btn bg-tinta text-white hover:bg-tinta/90; }
-.btn-secundario { @apply btn border border-black/15 bg-white hover:bg-black/5; }
-.btn-perigo { @apply btn border border-alerta/30 text-alerta hover:bg-alerta/5; }
-.input { @apply w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm outline-none focus:border-tinta; }
-.label { @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-black/50; }
-.chip { @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium; }
-h1 { @apply text-2xl font-bold tracking-tight; }
+body { @apply bg-papel text-tinta antialiased; font-feature-settings: 'ss01'; }
+h1, h2, h3 { @apply font-display tracking-tight; }
+h1 { @apply text-3xl font-bold sm:text-4xl; }
 h2 { @apply text-lg font-semibold; }
+
+.card { @apply rounded-2xl border border-linha bg-white p-5; }
+.btn { @apply inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-selo; }
+.btn-primario { @apply btn bg-tinta text-white hover:bg-tinta/85; }
+.btn-secundario { @apply btn border border-linha bg-white text-tinta hover:border-tinta/40; }
+.btn-perigo { @apply btn border border-alerta/30 bg-white text-alerta hover:bg-alerta/5; }
+.input { @apply w-full rounded-xl border border-linha bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-tinta; }
+.label { @apply mb-1.5 block text-xs font-semibold text-nevoa; }
+.chip { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold; }
+
+/* varredura do radar: único movimento automático da interface */
+@keyframes varrer { to { transform: rotate(360deg); } }
+.radar-varredura { transform-origin: 50% 50%; animation: varrer 6s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .radar-varredura { animation: none; opacity: 0; } }

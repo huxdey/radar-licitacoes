@@ -10,9 +10,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const m = await requireMember();
   return (
     <html lang="pt-BR">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap"
+        />
+      </head>
       <body>
         <Nav nome={m.nome} />
-        <main className="mx-auto max-w-6xl px-4 py-6">
+        <main className="mx-auto max-w-6xl px-4 py-8">
           {m.user && m.mfa && !m.member ? (
             <div className="card">
               <h1>Acesso pendente</h1>

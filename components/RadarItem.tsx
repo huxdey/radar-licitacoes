@@ -13,8 +13,8 @@ export function RadarItem({ id, visto, abrir, resumo, children }: { id: string; 
         if ((e.currentTarget as HTMLDetailsElement).open && !visto) start(() => marcarLicitacao(id, 'visualizado', true));
       }}
     >
-      <summary className="cursor-pointer list-none p-4">{resumo}</summary>
-      <div className="border-t border-black/5 p-4">{children}</div>
+      <summary className="cursor-pointer list-none p-5">{resumo}</summary>
+      <div className="border-t border-linha p-5">{children}</div>
     </details>
   );
 }
