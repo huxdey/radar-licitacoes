@@ -345,3 +345,18 @@ export async function alternarSegmento(id: string, ativo: boolean) {
   revalidatePath('/radar');
   revalidatePath('/configuracoes');
 }
+
+/** Busca sob encomenda: só os estados e modalidades escolhidos. */
+export async function buscarAgora(ufs: string[], modalidades: number[], forcar = false): Promise<Resultado> {
+  try {
+    const { user } = await membro();
+    if (!ufs.length) return { ok: false, msg: 'Escolha pelo menos um estado.' };
+    const { buscarSobDemanda } = await import('@/lib/busca');
+    const r = await buscarSobDemanda({ ufs, modalidades: modalidades.length ? modalidades : [6], forcar, userId: user!.id });
+    revalidatePath('/radar');
+    if (r.erros.length) return { ok: false, msg: `Parte da busca não terminou (o governo demorou). Clique em Buscar de novo para completar.` };
+    return { ok: true, msg: r.consultadas ? 'Busca concluída.' : 'Resultado da última hora.' };
+  } catch (e) {
+    return erro(e);
+  }
+}

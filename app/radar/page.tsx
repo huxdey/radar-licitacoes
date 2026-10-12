@@ -4,10 +4,10 @@ import { dataBR } from '@/lib/status';
 import { linkPortalPNCP } from '@/lib/pncp';
 import { sinaisDeComplexidade } from '@/lib/classify';
 import { RadarItem, MarcadorBotao } from '@/components/RadarItem';
-import { AcaoBotao } from '@/components/AcaoBotao';
 import { FormAcao } from '@/components/FormAcao';
 import { LinhaLicitacao } from '@/components/LinhaLicitacao';
-import { adicionarLicitacaoManual, iniciarProcesso, rodarRadarAgora } from '../actions';
+import { adicionarLicitacaoManual, iniciarProcesso } from '../actions';
+import { BuscaForm } from '@/components/BuscaForm';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -15,10 +15,8 @@ export const maxDuration = 300;
 const FILTROS = [
   ['abertas', 'Abertas'],
   ['nao_vistas', 'Não abertas ainda'],
-  ['prioritarias', 'Prioritárias'],
   ['favoritos', 'Salvas'],
   ['ignoradas', 'Ignoradas'],
-  ['todas', 'Histórico'],
 ] as const;
 
 export default async function Radar({ searchParams }: { searchParams: Record<string, string | undefined> }) {
@@ -26,37 +24,39 @@ export default async function Radar({ searchParams }: { searchParams: Record<str
   const filtro = searchParams.filtro ?? 'abertas';
   const pagina = Math.max(1, Number(searchParams.p ?? 1));
   const agora = new Date().toISOString();
+  const lista = (v?: string) => (v ? v.split(',').filter(Boolean) : []);
+  const segs = lista(searchParams.segs);
+  const ufs = lista(searchParams.ufs).map((u) => u.toUpperCase());
+  const dias = [7, 15, 30, 60].includes(Number(searchParams.dias)) ? Number(searchParams.dias) : 30;
+  const mods = lista(searchParams.mods).map(Number).filter(Boolean);
+  const desde = new Date(Date.now() - dias * 86_400_000).toISOString();
+  const temBusca = segs.length > 0 && ufs.length > 0;
 
   const { data: cats } = await sb.from('search_categories').select('id,nome,ativo').order('nome');
-  const ativos = (cats ?? []).filter((c) => c.ativo);
-  const idsAtivos = ativos.map((c) => c.id);
   const nomeCat = new Map((cats ?? []).map((c) => [c.id, c.nome]));
-  const segSel = searchParams.segmento && idsAtivos.includes(searchParams.segmento) ? searchParams.segmento : undefined;
-
-  // só segmentos ligados (ou licitações adicionadas à mão)
-  const filtroSegmentos = segSel ? `categorias.cs.{${segSel}}` : `origem.eq.manual,categorias.ov.{${idsAtivos.join(',') || '00000000-0000-0000-0000-000000000000'}}`;
   const abertoOu = `data_encerramento_proposta.gte.${agora},data_encerramento_proposta.is.null`;
 
-  let q = sb.from('tenders').select('*', { count: 'exact' }).or(filtroSegmentos);
-  if (filtro !== 'ignoradas') q = q.eq('ignorado', false);
-  if (filtro === 'abertas' || filtro === 'prioritarias' || filtro === 'nao_vistas') q = q.or(abertoOu);
-  if (filtro === 'nao_vistas') q = q.eq('visualizado', false);
-  if (filtro === 'prioritarias') q = q.eq('prioritaria', true);
-  if (filtro === 'favoritos') q = q.eq('favorito', true);
-  if (filtro === 'ignoradas') q = q.eq('ignorado', true);
-  if (searchParams.uf) q = q.eq('uf', searchParams.uf.toUpperCase());
-  if (searchParams.busca) q = q.ilike('objeto', `%${searchParams.busca}%`);
-  if (searchParams.meepp) q = q.eq('me_epp_indicio', true);
-  q = q.order('data_encerramento_proposta', { ascending: true, nullsFirst: false }).range((pagina - 1) * 30, pagina * 30 - 1);
+  let lic: any[] | null = [];
+  let count: number | null = 0;
+  if (temBusca) {
+    let q = sb.from('tenders').select('*', { count: 'exact' }).overlaps('categorias', segs).in('uf', ufs).gte('data_publicacao', desde);
+    if (mods.length) q = q.in('modalidade_id', mods);
+    if (filtro !== 'ignoradas') q = q.eq('ignorado', false);
+    if (filtro === 'abertas' || filtro === 'nao_vistas') q = q.or(abertoOu);
+    if (filtro === 'nao_vistas') q = q.eq('visualizado', false);
+    if (filtro === 'favoritos') q = q.eq('favorito', true);
+    if (filtro === 'ignoradas') q = q.eq('ignorado', true);
+    if (searchParams.busca) q = q.ilike('objeto', `%${searchParams.busca}%`);
+    if (searchParams.meepp) q = q.eq('me_epp_indicio', true);
+    const r = await q.order('data_encerramento_proposta', { ascending: true, nullsFirst: false }).range((pagina - 1) * 30, pagina * 30 - 1);
+    lic = r.data;
+    count = r.count;
+  }
 
-  const [{ data: lic, count }, { data: empresas }, { data: casos }, { data: contagemBruta }] = await Promise.all([
-    q,
+  const [{ data: empresas }, { data: casos }] = await Promise.all([
     sb.from('companies').select('id,razao_social,nome_fantasia,segmentos').order('razao_social'),
     sb.from('cases').select('id,tender_id,company:companies(nome_fantasia,razao_social)'),
-    sb.from('tenders').select('categorias').eq('ignorado', false).overlaps('categorias', idsAtivos.length ? idsAtivos : ['00000000-0000-0000-0000-000000000000']).or(abertoOu).limit(5000),
   ]);
-  const contagem = new Map<string, number>();
-  (contagemBruta ?? []).forEach((t) => contagem.set(t.categorias[0], (contagem.get(t.categorias[0]) ?? 0) + 1));
   const casosPorLic = new Map<string, any[]>();
   (casos ?? []).forEach((c: any) => casosPorLic.set(c.tender_id, [...(casosPorLic.get(c.tender_id) ?? []), c]));
   const link = (p: Record<string, string | undefined>) => {
@@ -64,66 +64,52 @@ export default async function Radar({ searchParams }: { searchParams: Record<str
     return `/radar?${qs}`;
   };
   const totalPaginas = Math.max(1, Math.ceil((count ?? 0) / 30));
-  const pill = (ativo: boolean) =>
-    `inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-semibold transition ${
-      ativo ? 'border-tinta bg-tinta text-white' : 'border-linha bg-white text-tinta hover:border-tinta/40'
-    }`;
+  const descricao = temBusca
+    ? `${segs.map((s) => nomeCat.get(s)).join(', ')} em ${ufs.join(', ')}, publicadas nos últimos ${dias} dias`
+    : '';
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1>{segSel ? nomeCat.get(segSel) : 'Radar'}</h1>
-          <p className="mt-1 text-nevoa">
-            {count ?? 0} {count === 1 ? 'licitação' : 'licitações'}
-            {segSel ? '' : ' nos seus segmentos'}, ordenadas pelo prazo que acaba primeiro.
-          </p>
-        </div>
-        <AcaoBotao acao={rodarRadarAgora.bind(null, 'diario')} classe="btn-primario" processando="Buscando no governo...">
-          Buscar novidades
-        </AcaoBotao>
+      <div>
+        <h1>Buscar licitações</h1>
+        <p className="mt-1 text-nevoa">Escolha o segmento, o estado e o período. O sistema busca só isso no governo.</p>
       </div>
 
-      {/* Segmento: escolhe um, mostra só ele */}
-      <div className="flex flex-wrap gap-2">
-        <Link href={link({ segmento: undefined, p: undefined })} className={pill(!segSel)}>
-          Todos os meus
-        </Link>
-        {ativos.map((c) => (
-          <Link key={c.id} href={link({ segmento: c.id, p: undefined, abrir: undefined })} className={pill(segSel === c.id)}>
-            {c.nome}
-            <span className={`rounded-full px-1.5 text-xs ${segSel === c.id ? 'bg-white/15' : 'bg-papel'}`}>{contagem.get(c.id) ?? 0}</span>
-          </Link>
-        ))}
-        {ativos.length === 0 && <p className="text-sm text-alerta">Nenhum segmento ligado. Ligue os seus no Painel.</p>}
-      </div>
+      <BuscaForm segmentos={(cats ?? []).map((c) => ({ id: c.id, nome: c.nome }))} inicial={{ segs, ufs, dias, mods: mods.length ? mods : [6] }} />
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-3 border-b border-linha pb-3">
-        {FILTROS.map(([id, r]) => (
-          <Link
-            key={id}
-            href={link({ filtro: id, p: undefined })}
-            className={`-mb-[13px] border-b-2 pb-3 text-sm font-semibold ${filtro === id ? 'border-selo text-tinta' : 'border-transparent text-nevoa hover:text-tinta'}`}
-          >
-            {r}
-          </Link>
-        ))}
-        <form action="/radar" className="ml-auto flex items-center gap-2">
-          <input type="hidden" name="filtro" value={filtro} />
-          {segSel && <input type="hidden" name="segmento" value={segSel} />}
-          <input name="busca" defaultValue={searchParams.busca} placeholder="Procurar palavra" className="input w-44 py-2" aria-label="Procurar palavra no objeto" />
-          <input name="uf" defaultValue={searchParams.uf} placeholder="UF" maxLength={2} className="input w-16 py-2" aria-label="Estado" />
-          <label className="flex items-center gap-1.5 text-sm text-nevoa">
-            <input type="checkbox" name="meepp" value="1" defaultChecked={!!searchParams.meepp} /> ME/EPP
-          </label>
-          <button className="btn-secundario py-2">Procurar</button>
-        </form>
-      </div>
+      {temBusca && (
+        <>
+          <div>
+            <h2 className="text-2xl">{count ?? 0} {count === 1 ? 'licitação' : 'licitações'}</h2>
+            <p className="text-nevoa">{descricao}. Ordenadas pelo prazo que acaba primeiro.</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 border-b border-linha pb-3">
+            {FILTROS.map(([id, r]) => (
+              <Link
+                key={id}
+                href={link({ filtro: id, p: undefined })}
+                className={`-mb-[13px] border-b-2 pb-3 text-sm font-semibold ${filtro === id ? 'border-selo text-tinta' : 'border-transparent text-nevoa hover:text-tinta'}`}
+              >
+                {r}
+              </Link>
+            ))}
+            <form action="/radar" className="ml-auto flex items-center gap-2">
+              {['segs', 'ufs', 'dias', 'mods', 'filtro'].map((k) => searchParams[k] && <input key={k} type="hidden" name={k} value={searchParams[k]} />)}
+              <input name="busca" defaultValue={searchParams.busca} placeholder="Procurar palavra" className="input w-44 py-2" aria-label="Procurar palavra no objeto" />
+              <label className="flex items-center gap-1.5 text-sm text-nevoa">
+                <input type="checkbox" name="meepp" value="1" defaultChecked={!!searchParams.meepp} /> ME/EPP
+              </label>
+              <button className="btn-secundario py-2">Filtrar</button>
+            </form>
+          </div>
+        </>
+      )}
 
       <div className="space-y-3">
-        {!lic?.length && (
+        {temBusca && !lic?.length && (
           <div className="card text-center text-nevoa">
-            Nada por aqui neste filtro. Tente "Buscar novidades" ou outro segmento.
+            Nenhuma licitação aberta com esses filtros. Se você acabou de escolher um estado novo, clique em Buscar.
           </div>
         )}
         {lic?.map((t) => {
@@ -140,7 +126,7 @@ export default async function Radar({ searchParams }: { searchParams: Record<str
               resumo={
                 <LinhaLicitacao
                   t={t}
-                  segmento={segSel ? undefined : nomeCat.get(t.categorias[0])}
+                  segmento={segs.length > 1 ? nomeCat.get(t.categorias[0]) : undefined}
                   destaque={vinculos.length > 0 ? <span className="chip bg-violet-100 text-violet-800">em processo</span> : t.favorito ? <span className="chip bg-ambar/15 text-ambar">salva</span> : null}
                 />
               }

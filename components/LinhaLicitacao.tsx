@@ -1,12 +1,17 @@
 import { brl, diasAte } from '@/lib/status';
 
+const publicada = (d: string) => {
+  const n = Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000);
+  return n <= 0 ? 'hoje' : n === 1 ? 'ontem' : `há ${n} dias`;
+};
+
 /** Linha de licitação: a barra lateral mostra a urgência do prazo. */
 export function LinhaLicitacao({
   t,
   segmento,
   destaque,
 }: {
-  t: { objeto: string | null; orgao_nome: string | null; municipio: string | null; uf: string | null; valor_estimado: number | null; data_encerramento_proposta: string | null; prioritaria?: boolean; me_epp_indicio?: boolean; visualizado?: boolean };
+  t: { objeto: string | null; orgao_nome: string | null; municipio: string | null; uf: string | null; valor_estimado: number | null; data_encerramento_proposta: string | null; data_publicacao?: string | null; prioritaria?: boolean; me_epp_indicio?: boolean; visualizado?: boolean };
   segmento?: string;
   destaque?: React.ReactNode;
 }) {
@@ -27,6 +32,7 @@ export function LinhaLicitacao({
         <p className={`mt-1.5 line-clamp-2 text-[15px] leading-snug ${t.visualizado === false ? 'font-semibold' : 'font-medium'}`}>{t.objeto}</p>
         <p className="mt-1 truncate text-sm text-nevoa">
           {t.orgao_nome} {t.municipio && <>em {t.municipio}/{t.uf}</>}
+          {t.data_publicacao && <>, publicada {publicada(t.data_publicacao)}</>}
         </p>
       </div>
       <div className="shrink-0 text-right">
