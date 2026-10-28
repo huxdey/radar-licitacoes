@@ -45,7 +45,8 @@ export async function rodarRadarAgora(modo: ModoRadar): Promise<Resultado> {
 export async function marcarLicitacao(id: string, campo: 'visualizado' | 'favorito' | 'ignorado' | 'arquivado', valor: boolean) {
   const { sb } = await membro();
   await sb.from('tenders').update({ [campo]: valor }).eq('id', id);
-  revalidatePath('/radar');
+  // abrir para ver não recarrega a página (senão o item fecha sozinho)
+  if (campo !== 'visualizado') revalidatePath('/radar');
 }
 
 export async function adicionarLicitacaoManual(fd: FormData): Promise<Resultado> {

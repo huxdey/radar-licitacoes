@@ -6,11 +6,11 @@ import { classificar, indicioMeEpp, type Categoria } from './classify';
 
 export const UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
 
-const VALIDADE_CACHE_HORAS = 6; // a mesma UF+modalidade não é baixada de novo dentro desse prazo
+const VALIDADE_CACHE_HORAS = 24 * 30; // a mesma UF+modalidade não é baixada de novo dentro desse prazo
 
 export async function buscarSobDemanda(o: { ufs: string[]; modalidades: number[]; forcar?: boolean; userId?: string }) {
   const sb = supabaseAdmin();
-  definirPrazoBusca(240_000);
+  definirPrazoBusca(45_000);
   const { data: cats } = await sb.from('search_categories').select('id,nome,palavras_chave,exclusoes,ativo');
   const categorias = (cats ?? []) as Categoria[];
   const { data: cache } = await sb.from('buscas_cache').select('uf,modalidade,feito_em');
