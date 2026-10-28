@@ -52,6 +52,13 @@ export default async function Radar({ searchParams }: { searchParams: Record<str
     lic = r.data;
     count = r.count;
   }
+  // veio do Painel (clicou numa licitação): mostra ela direto, aberta
+  const vindoDoPainel = !temBusca && !!searchParams.abrir;
+  if (vindoDoPainel) {
+    const { data } = await sb.from('tenders').select('*').eq('id', searchParams.abrir!).limit(1);
+    lic = data;
+    count = data?.length ?? 0;
+  }
 
   const [{ data: empresas }, { data: casos }] = await Promise.all([
     sb.from('companies').select('id,razao_social,nome_fantasia,segmentos').order('razao_social'),
@@ -71,11 +78,14 @@ export default async function Radar({ searchParams }: { searchParams: Record<str
   return (
     <div className="space-y-6">
       <div>
-        <h1>Buscar licitações</h1>
+        {vindoDoPainel && <Link href="/" className="mb-2 inline-block text-sm font-semibold text-selo hover:underline">Voltar ao painel</Link>}
+        <h1>{vindoDoPainel ? 'Licitação' : 'Buscar licitações'}</h1>
         <p className="mt-1 text-nevoa">Escolha o segmento, o estado e o período. O sistema busca só isso no governo.</p>
       </div>
 
+{!vindoDoPainel && (
       <BuscaForm segmentos={(cats ?? []).map((c) => ({ id: c.id, nome: c.nome }))} inicial={{ segs, ufs, dias, mods: mods.length ? mods : [6] }} />
+      )}
 
       {temBusca && (
         <>
@@ -107,7 +117,7 @@ export default async function Radar({ searchParams }: { searchParams: Record<str
       )}
 
       <div className="space-y-3">
-        {temBusca && !lic?.length && (
+        {(temBusca || vindoDoPainel) && !lic?.length && (
           <div className="card text-center text-nevoa">
             Nenhuma licitação aberta com esses filtros. Se você acabou de escolher um estado novo, clique em Buscar.
           </div>
